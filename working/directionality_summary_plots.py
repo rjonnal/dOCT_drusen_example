@@ -9,8 +9,10 @@ data_root = 'data_reorganized'
 dsets = glob.glob(os.path.join(data_root,'*'))
 
 for dset in dsets:
-
+    
     subject_id = os.path.split(dset)[1]
+    if subject_id[0]=='_':
+        continue
     
     raw_data_drusen = np.load(os.path.join(dset,'directionality_raw_data_drusen.npy'))
     rolling_average_drusen = np.load(os.path.join(dset,'directionality_rolling_average_drusen.npy'))
@@ -18,6 +20,16 @@ for dset in dsets:
     raw_data_nondrusen = np.load(os.path.join(dset,'directionality_raw_data_nondrusen.npy'))
     rolling_average_nondrusen = np.load(os.path.join(dset,'directionality_rolling_average_nondrusen.npy'))
     fitted_curve_nondrusen = np.load(os.path.join(dset,'directionality_fitted_curve_nondrusen.npy'))
+
+
+    theta_rd_d = raw_data_drusen[:,0]
+    theta_rd_nd = raw_data_nondrusen[:,0]
+    amp_rd_d = raw_data_drusen[:,1]
+    amp_rd_nd = raw_data_nondrusen[:,1]
+
+    plt.figure()
+    plt.hist(theta_rd_d)
+
     
     plt.figure()
     plt.plot(rolling_average_drusen[:,0],rolling_average_drusen[:,1],'b.')
