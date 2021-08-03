@@ -4,39 +4,79 @@ import os,sys,glob
 import scipy.optimize as spo
 import shutil
 
+plt.style.use('seaborn-deep')
+
 data_root = 'data_reorganized'
 
 dsets = glob.glob(os.path.join(data_root,'*'))
 
-for dset in dsets:
+
+def rolling_average(theta,amp,window_width=4.0,step_size=2.0,diagnostics=False):
     
+    # find the start and end thetas
+    t_start = np.min(theta)
+    t_end = np.max(theta)
+
+    window_centers = []
+    amplitude_mean = []
+    amplitude_std = []
+
+    for t in np.arange(t_start,t_end+step_size,step_size):
+        window_centers.append(t+window_width/2.0)
+
+        # find he indices in the theta array where the angle falls in our window
+        idx = np.where(np.logical_and(theta>=t,theta<t+window_width))[0]
+
+        amplitude_mean.append(np.mean(amp[idx]))
+        amplitude_std.append(np.std(amp[idx]))
+
+    if diagnostics:
+        pl.figure()
+                            
+        # plot the raw data with low alpha
+        plt.plot(theta,amp,'k.',alpha=0.1,markersize=1,label='raw data')
+
+        # plot the average with standard deviation bars
+        plt.errorbar(window_centers,amplitude_mean,amplitude_std,label='rolling average')
+
+        plt.legend()
+
+    return np.array(window_centers),np.array(amplitude_mean),np.array(amplitude_std)
+    
+for dset in dsets:
     subject_id = os.path.split(dset)[1]
     if subject_id[0]=='_':
         continue
     
     raw_data_drusen = np.load(os.path.join(dset,'directionality_raw_data_drusen.npy'))
-    rolling_average_drusen = np.load(os.path.join(dset,'directionality_rolling_average_drusen.npy'))
-    fitted_curve_drusen = np.load(os.path.join(dset,'directionality_fitted_curve_drusen.npy'))
     raw_data_nondrusen = np.load(os.path.join(dset,'directionality_raw_data_nondrusen.npy'))
-    rolling_average_nondrusen = np.load(os.path.join(dset,'directionality_rolling_average_nondrusen.npy'))
-    fitted_curve_nondrusen = np.load(os.path.join(dset,'directionality_fitted_curve_nondrusen.npy'))
-
 
     theta_rd_d = raw_data_drusen[:,0]
     theta_rd_nd = raw_data_nondrusen[:,0]
     amp_rd_d = raw_data_drusen[:,1]
     amp_rd_nd = raw_data_nondrusen[:,1]
 
-    plt.figure()
-    plt.hist(theta_rd_d)
-
+    #rolling_average(theta_rd_nd,amp_rd_nd)
     
+    #sys.exit()
+    
+    rolling_average_drusen = np.load(os.path.join(dset,'directionality_rolling_average_drusen.npy'))
+    fitted_curve_drusen = np.load(os.path.join(dset,'directionality_fitted_curve_drusen.npy'))
+    rolling_average_nondrusen = np.load(os.path.join(dset,'directionality_rolling_average_nondrusen.npy'))
+    fitted_curve_nondrusen = np.load(os.path.join(dset,'directionality_fitted_curve_nondrusen.npy'))
+
     plt.figure()
-    plt.plot(rolling_average_drusen[:,0],rolling_average_drusen[:,1],'b.')
-    plt.plot(fitted_curve_drusen[:,0],fitted_curve_drusen[:,1],'k--')
-    plt.plot(rolling_average_nondrusen[:,0],rolling_average_nondrusen[:,1],'r.')
-    plt.plot(fitted_curve_nondrusen[:,0],fitted_curve_nondrusen[:,1],'k--')
+    plt.plot(raw_data_nondrusen[:,0],raw_data_nondrusen[:,1],'k.',alpha=0.1,markersize=1,label='raw data')
+    plt.plot(rolling_average_nondrusen[:,0],rolling_average_nondrusen[:,1],'b-',label='rolling average')
+
+    wc,mamp,samp = rolling_average(theta_rd_nd,amp_rd_nd)
+    plt.errorbar(wc,mamp,samp)
+    
+    #plt.plot(fitted_curve_drusen[:,0],fitted_curve_drusen[:,1],'k--')
+    #plt.plot(rolling_average_nondrusen[:,0],rolling_average_nondrusen[:,1],'b--')
+    #plt.plot(fitted_curve_nondrusen[:,0],fitted_curve_nondrusen[:,1],'k--')
     plt.title(subject_id)
+    
 plt.show()
 
 print(dsets)
