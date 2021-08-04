@@ -4,10 +4,10 @@ import os,sys,glob
 import scipy.optimize as spo
 import shutil
 
-out_root = 'data_reorganized'
+out_root = 'data'
 os.makedirs(out_root,exist_ok=True)
 
-dsets = glob.glob('data/*')
+dsets = glob.glob('data_original/*')
 
 in_types_1 = ['drusDis','img','isosAng','isosLoc','isosVal']
 out_types_1 = ['distance_to_drusen_margin','average_bscan','isos_angle','isos_axial_location','isos_amplitude']
@@ -49,9 +49,9 @@ for idx,dset in enumerate(dsets):
             temp = np.load(in_fn)
             ppf = float(pupil_position)
             if ppf<0:
-                pp_string = 'm%0.1f'%abs(ppf)
+                pp_string = 'm%02d'%abs(ppf)
             else:
-                pp_string = 'p%0.1f'%abs(ppf)
+                pp_string = 'p%02d'%abs(ppf)
                 
             out_fn = os.path.join(out_dn,'pupil_position_%s_%s.npy'%(pp_string,out_type))
             shutil.copyfile(in_fn,out_fn)
