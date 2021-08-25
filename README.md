@@ -35,10 +35,10 @@ import numpy as np
 from matplotlib import pyplot as plt
 import os
 import scipy.optimize as spo
-
+plt.style.use('seaborn-deep')
 print_dpi = 300
 screen_dpi = 100
-figure_size = (5,3)
+figure_size = (5,4)
 pupil_position = 'p00'
 subject_folder = './data/subject_02/'
 
@@ -70,7 +70,7 @@ plt.xticks([])
 plt.colorbar()
 plt.plot(x,isos_location,label='IS/OS location',alpha=0.5)
 plt.legend()
-plt.savefig('figures/amplitude_vs_location.png',dpi=print_dpi)
+plt.savefig('figures/bscan_with_trace.png',dpi=print_dpi)
 
 # plot angle and amplitude as functions of x
 plt.figure(figsize=figure_size,dpi=screen_dpi)
@@ -200,13 +200,12 @@ The width of Gaussian distributions is more commonly described by standard devia
 
 #### Estimating $B$, $A$, and $\rho$
 
-To estimate these three parameters, the smoothed functions described above were fit with a four parameter model. ($x_0$ was used to optimize the fits, but was not considered in further analysis.)
+To estimate these three parameters, the smoothed functions described above were fit with a four parameter model. ($x_0$ was used to optimize the fits, but was not considered in further analysis.) In the next step, the median-filtered data from one subject's non-drusen and drusen regions are fit separately, and the results of the fits visualized side by side.
 
 
 ```python
 def gaussian(x_mm, B, A, rho, x0_mm):
     return B + A*(10**(-rho*(x_mm-x0_mm)**2))
-
 
 amax = None
 
@@ -216,69 +215,42 @@ def filename_to_fit(fn):
     fit_params = spo.curve_fit(gaussian,wc,amed)[0]
     return fit_params, x_mm, amp, wc, amed, std
 
-def subject_to_plot(subject_folder):
-    plt.figure(figsize=(figure_size[0]*2,figure_size[1]),dpi=screen_dpi)
-    for idx,fn in enumerate(['directionality_raw_data_nondrusen_centered.npy','directionality_raw_data_drusen_centered.npy']):
-        ffn = os.path.join(subject_folder,fn)
-        plt.subplot(1,2,idx+1)
-        fit_params, x_mm, amp, wc, amed, std = filename_to_fit(ffn)
-        if idx==0:
-            amax = np.max(amp)
-        afit = gaussian(wc,*fit_params)
-        plt.plot(x_mm,amp,'.',alpha=0.1,markersize=1,label='raw data')
-        # plot the average with standard deviation bars
-        plt.errorbar(wc,amed,std,label='rolling median')
-        plt.plot(wc,afit,'k--',label='fit')
-        plt.xlabel('effective pupil position (mm)')
-        plt.ylabel('normalized amplitude (ADU)')
-        plt.gca().set_ylim(bottom=0)
-        plt.gca().set_ylim(top=amax)
-        plt.xlim((-2.5,2.5))
-        plt.legend()
+subject_folder='data/subject_02'
 
+plt.figure(figsize=(figure_size[0]*2,figure_size[1]),dpi=screen_dpi)
+titles = ['non-drusen','drusen']
 
-for subject_folder in ['data/subject_01','data/subject_02','data/subject_03','data/subject_04']:
-    print(ffn)
-    print(subject_to_plot(subject_folder))
-    print()
-        
-#print(spo.curve_fit(gaussian,x_mm,amplitude)[0])
-#print(spo.curve_fit(gaussian,window_centers,amplitude_median)[0])
-#print(spo.curve_fit(gaussian,window_centers,amplitude_mean)[0])
-
-
+for idx,fn in enumerate(['directionality_raw_data_nondrusen_centered.npy','directionality_raw_data_drusen_centered.npy']):
+    ffn = os.path.join(subject_folder,fn)
+    plt.subplot(1,2,idx+1)
+    fit_params, x_mm, amp, wc, amed, std = filename_to_fit(ffn)
+    if idx==0:
+        amax = np.max(amp)
+    afit = gaussian(wc,*fit_params)
+    plt.plot(x_mm,amp,'.',alpha=0.1,markersize=1,label='raw data')
+    # plot the average with standard deviation bars
+    plt.errorbar(wc,amed,std,label='rolling median')
+    plt.plot(wc,afit,'k--',label='fit')
+    plt.xlabel('effective pupil position (mm)')
+    plt.ylabel('normalized amplitude (ADU)')
+    plt.gca().set_ylim(bottom=0)
+    plt.gca().set_ylim(top=amax)
+    plt.xlim((-2.5,2.5))
+    plt.legend()
+    plt.title(titles[idx])
+plt.savefig('figures/fitting_normal_drusen.png',dpi=print_dpi)
 ```
 
-    data/subject_01/directionality_raw_data_drusen_centered.npy
-    None
-    
-    data/subject_01/directionality_raw_data_drusen_centered.npy
-    None
-    
-    data/subject_01/directionality_raw_data_drusen_centered.npy
-    None
-    
-    data/subject_01/directionality_raw_data_drusen_centered.npy
-    None
-    
+
+![png](dOCT_drusen_example_files/dOCT_drusen_example_9_0.png)
 
 
-    <ipython-input-15-42de092177a3>:2: RuntimeWarning: overflow encountered in power
-      return B + A*(10**(-rho*(x_mm-x0_mm)**2))
+#### Comparing $B$, $A$, and $\rho$ between non-drusen and drusen regions
 
 
 
-![png](dOCT_drusen_example_files/dOCT_drusen_example_9_2.png)
+```python
+subject_folders = ['data/subject_01', 'data/subject_02', 'data/subject_03', 'data/subject_04']
+```
 
-
-
-![png](dOCT_drusen_example_files/dOCT_drusen_example_9_3.png)
-
-
-
-![png](dOCT_drusen_example_files/dOCT_drusen_example_9_4.png)
-
-
-
-![png](dOCT_drusen_example_files/dOCT_drusen_example_9_5.png)
 
