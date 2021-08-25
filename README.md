@@ -34,10 +34,11 @@ The following example illustrates the data recorded from a single pupil entry po
 import numpy as np
 from matplotlib import pyplot as plt
 import os
-plt.style.use('seaborn-deep')
+import scipy.optimize as spo
+
 print_dpi = 300
 screen_dpi = 100
-
+figure_size = (5,3)
 pupil_position = 'p00'
 subject_folder = './data/subject_02/'
 
@@ -81,18 +82,11 @@ plt.savefig('figures/amplitude_vs_location.png',dpi=print_dpi)
 ```
 
 
-
-
-    Text(0.5, 0, 'x location')
-
+![png](dOCT_drusen_example_files/dOCT_drusen_example_1_0.png)
 
 
 
 ![png](dOCT_drusen_example_files/dOCT_drusen_example_1_1.png)
-
-
-
-![png](dOCT_drusen_example_files/dOCT_drusen_example_1_2.png)
 
 
 #### Data aggregated over pupil positions
@@ -114,14 +108,17 @@ $$x = \tan(\theta)f$$
 
 
 ```python
-nondrusen_aggregate_fn = os.path.join(subject_folder,'directionality_raw_data_nondrusen_centered.npy')
-angle_amplitude = np.load(nondrusen_aggregate_fn)
-# divide the angle by 2 to account for x-z sampling anisotropy
-angle = angle_amplitude[:,0]/2.0
-angle = (angle/180*np.pi)
-x_mm = np.tan(angle)*16.67
-amplitude = angle_amplitude[:,1]
+def filename_to_x_mm_amplitude(fn):
+    angle_amplitude = np.load(fn)
+    # divide the angle by 2 to account for x-z sampling anisotropy
+    angle = angle_amplitude[:,0]/2.0
+    angle = (angle/180*np.pi)
+    x_mm = np.tan(angle)*16.67
+    amplitude = angle_amplitude[:,1]
+    return x_mm,amplitude
 
+nondrusen_aggregate_fn = os.path.join(subject_folder,'directionality_raw_data_nondrusen_centered.npy')
+x_mm,amplitude = filename_to_x_mm_amplitude(nondrusen_aggregate_fn)
 
 plt.figure(figsize=figure_size,dpi=screen_dpi)
 plt.plot(x_mm,amplitude,'.',alpha=0.2,markersize=1)
@@ -148,7 +145,7 @@ def rolling_median(pupil_position,amp,window_width=1.0,step_size=0.5,diagnostics
     # find the start and end angles
     t_start = np.min(pupil_position)
     t_end = np.max(pupil_position)
-    print(t_start,t_end)
+    #print(t_start,t_end)
     window_centers = []
     amplitude_mean = []
     amplitude_median = []
@@ -185,11 +182,8 @@ plt.show()
 
 ```
 
-    -5.316274783874224 3.618570634585382
 
-
-
-![png](dOCT_drusen_example_files/dOCT_drusen_example_5_1.png)
+![png](dOCT_drusen_example_files/dOCT_drusen_example_5_0.png)
 
 
 #### A model for directionality
@@ -210,7 +204,81 @@ To estimate these three parameters, the smoothed functions described above were 
 
 
 ```python
-def objective_function(x_mm, B, A, rho, x0_mm):
+def gaussian(x_mm, B, A, rho, x0_mm):
     return B + A*(10**(-rho*(x_mm-x0_mm)**2))
 
+
+amax = None
+
+def filename_to_fit(fn):
+    x_mm,amp = filename_to_x_mm_amplitude(fn)
+    wc,amean,amed,std = rolling_median(x_mm,amp)
+    fit_params = spo.curve_fit(gaussian,wc,amed)[0]
+    return fit_params, x_mm, amp, wc, amed, std
+
+def subject_to_plot(subject_folder):
+    plt.figure(figsize=(figure_size[0]*2,figure_size[1]),dpi=screen_dpi)
+    for idx,fn in enumerate(['directionality_raw_data_nondrusen_centered.npy','directionality_raw_data_drusen_centered.npy']):
+        ffn = os.path.join(subject_folder,fn)
+        plt.subplot(1,2,idx+1)
+        fit_params, x_mm, amp, wc, amed, std = filename_to_fit(ffn)
+        if idx==0:
+            amax = np.max(amp)
+        afit = gaussian(wc,*fit_params)
+        plt.plot(x_mm,amp,'.',alpha=0.1,markersize=1,label='raw data')
+        # plot the average with standard deviation bars
+        plt.errorbar(wc,amed,std,label='rolling median')
+        plt.plot(wc,afit,'k--',label='fit')
+        plt.xlabel('effective pupil position (mm)')
+        plt.ylabel('normalized amplitude (ADU)')
+        plt.gca().set_ylim(bottom=0)
+        plt.gca().set_ylim(top=amax)
+        plt.xlim((-2.5,2.5))
+        plt.legend()
+
+
+for subject_folder in ['data/subject_01','data/subject_02','data/subject_03','data/subject_04']:
+    print(ffn)
+    print(subject_to_plot(subject_folder))
+    print()
+        
+#print(spo.curve_fit(gaussian,x_mm,amplitude)[0])
+#print(spo.curve_fit(gaussian,window_centers,amplitude_median)[0])
+#print(spo.curve_fit(gaussian,window_centers,amplitude_mean)[0])
+
+
 ```
+
+    data/subject_01/directionality_raw_data_drusen_centered.npy
+    None
+    
+    data/subject_01/directionality_raw_data_drusen_centered.npy
+    None
+    
+    data/subject_01/directionality_raw_data_drusen_centered.npy
+    None
+    
+    data/subject_01/directionality_raw_data_drusen_centered.npy
+    None
+    
+
+
+    <ipython-input-15-42de092177a3>:2: RuntimeWarning: overflow encountered in power
+      return B + A*(10**(-rho*(x_mm-x0_mm)**2))
+
+
+
+![png](dOCT_drusen_example_files/dOCT_drusen_example_9_2.png)
+
+
+
+![png](dOCT_drusen_example_files/dOCT_drusen_example_9_3.png)
+
+
+
+![png](dOCT_drusen_example_files/dOCT_drusen_example_9_4.png)
+
+
+
+![png](dOCT_drusen_example_files/dOCT_drusen_example_9_5.png)
+

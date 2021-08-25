@@ -34,8 +34,11 @@ The following example illustrates the data recorded from a single pupil entry po
 import numpy as np
 from matplotlib import pyplot as plt
 import os
-plt.style.use('seaborn-deep')
+import scipy.optimize as spo
 
+print_dpi = 300
+screen_dpi = 100
+figure_size = (5,3)
 pupil_position = 'p00'
 subject_folder = './data/subject_02/'
 
@@ -59,7 +62,7 @@ isos_amplitude_fn = os.path.join(subject_folder,'pupil_position_%s_isos_amplitud
 isos_amplitude = np.load(isos_amplitude_fn)
 
 # show the B-scan and resulting IS/OS curve
-plt.figure(figsize=(6,3),dpi=150)
+plt.figure(figsize=figure_size,dpi=screen_dpi)
 plt.imshow(dB,clim=clim,cmap='gray')
 plt.ylim((2000,1300))
 plt.xticks([])
@@ -67,28 +70,23 @@ plt.xticks([])
 plt.colorbar()
 plt.plot(x,isos_location,label='IS/OS location',alpha=0.5)
 plt.legend()
+plt.savefig('figures/amplitude_vs_location.png',dpi=print_dpi)
 
 # plot angle and amplitude as functions of x
-plt.figure(figsize=(3.6,3),dpi=150)
+plt.figure(figsize=figure_size,dpi=screen_dpi)
 plt.plot(x,isos_angle,label='IS/OS angle')
 plt.plot(x,20*np.log10(isos_amplitude),label='IS/OS amplitude (dB)')
 plt.legend()
 plt.xlabel('x location')
+plt.savefig('figures/amplitude_vs_location.png',dpi=print_dpi)
 ```
 
 
-
-
-    Text(0.5, 0, 'x location')
-
+![png](dOCT_drusen_example_files/dOCT_drusen_example_1_0.png)
 
 
 
 ![png](dOCT_drusen_example_files/dOCT_drusen_example_1_1.png)
-
-
-
-![png](dOCT_drusen_example_files/dOCT_drusen_example_1_2.png)
 
 
 #### Data aggregated over pupil positions
@@ -102,36 +100,38 @@ Each contains an Nx2 matrix, where N represents the number of data points aggreg
 
 #### Visualization of aggregated data
 
-The plot below illustrates the data aggregated from one subject's non-drusen IS/OS. In order to calculate the angle correctly, the x and z sampling densities of the OCT image must be considered. The width of the OCT scan on the retina was $2 mm$, sampled with 800 A-scans, resulting in a pixel width of $2.5 \mu m$. The depth corresponding to a single pixel was $5 \mu m$, which requires a scaling of the angle by a factor of 2. Assuming an eye length of $22.7 mm$ and refractive index of $1.33$ (thus an optical path length through the eye of $16.7 mm$), a tangent angle $\theta$, and eye length $\ell$, the effective pupil position $x$ is given by:
+The plot below illustrates the data aggregated from one subject's non-drusen IS/OS. In order to calculate the angle correctly, the x and z sampling densities of the OCT image must be considered. The width of the OCT scan on the retina was $2 mm$, sampled with 800 A-scans, resulting in a pixel width of $2.5 \mu m$. The depth corresponding to a single pixel was $5 \mu m$, which requires a scaling of the angle by a factor of 2. Assuming an eye focal length $f$ of $16.7 mm$, and a tangent angle $\theta$, the effective pupil position $x$ is given by:
 
-$$x = \tan(\theta)\ell$$
+$$x = \tan(\theta)f$$
 
 
 
 
 ```python
+def filename_to_x_mm_amplitude(fn):
+    angle_amplitude = np.load(fn)
+    # divide the angle by 2 to account for x-z sampling anisotropy
+    angle = angle_amplitude[:,0]/2.0
+    angle = (angle/180*np.pi)
+    x_mm = np.tan(angle)*16.67
+    amplitude = angle_amplitude[:,1]
+    return x_mm,amplitude
+
 nondrusen_aggregate_fn = os.path.join(subject_folder,'directionality_raw_data_nondrusen_centered.npy')
-angle_amplitude = np.load(nondrusen_aggregate_fn)
-angle = angle_amplitude[:,0]/2.0
-angle = (angle/180*np.pi)
-x = np.tan(angle)*16.67
-print(x.min(),x.max())
-amplitude = angle_amplitude[:,1]
+x_mm,amplitude = filename_to_x_mm_amplitude(nondrusen_aggregate_fn)
 
-
-plt.figure(figsize=(3.7,3),dpi=150)
-plt.plot(x,amplitude,'.',alpha=0.2,markersize=1)
+plt.figure(figsize=figure_size,dpi=screen_dpi)
+plt.plot(x_mm,amplitude,'.',alpha=0.2,markersize=1)
 plt.gca().set_ylim(bottom=0)
+plt.ylabel('normalized amplitude (ADU)')
 plt.xlabel('effective pupil position (mm)')
+plt.savefig('figures/amplitude_vs_angle.png',dpi=print_dpi)
 plt.show()
 
 ```
 
-    -5.316274783874224 3.618570634585382
 
-
-
-![png](dOCT_drusen_example_files/dOCT_drusen_example_3_1.png)
+![png](dOCT_drusen_example_files/dOCT_drusen_example_3_0.png)
 
 
 #### Improving data visualization using rolling averaging
@@ -145,9 +145,10 @@ def rolling_median(pupil_position,amp,window_width=1.0,step_size=0.5,diagnostics
     # find the start and end angles
     t_start = np.min(pupil_position)
     t_end = np.max(pupil_position)
-    print(t_start,t_end)
+    #print(t_start,t_end)
     window_centers = []
     amplitude_mean = []
+    amplitude_median = []
     amplitude_std = []
 
     for t in np.arange(t_start,t_end+step_size,step_size):
@@ -157,45 +158,127 @@ def rolling_median(pupil_position,amp,window_width=1.0,step_size=0.5,diagnostics
 
         if len(idx)>0:
             window_centers.append(t+window_width/2.0)        
-            amplitude_mean.append(np.median(amp[idx]))
+            amplitude_mean.append(np.mean(amp[idx]))
+            amplitude_median.append(np.median(amp[idx]))
             amplitude_std.append(np.std(amp[idx]))
 
 
 
-    return np.array(window_centers),np.array(amplitude_mean),np.array(amplitude_std)
+    return np.array(window_centers),np.array(amplitude_mean),np.array(amplitude_median),np.array(amplitude_std)
 
-window_centers, amplitude_mean, amplitude_std = rolling_median(x,amplitude)
-plt.figure(figsize=(3.7,3),dpi=150)
+window_centers, amplitude_mean, amplitude_median, amplitude_std = rolling_median(x_mm,amplitude)
+plt.figure(figsize=figure_size,dpi=screen_dpi)
 # plot the raw data with low alpha
-plt.plot(x,amplitude,'.',alpha=0.1,markersize=1,label='raw data')
+plt.plot(x_mm,amplitude,'.',alpha=0.1,markersize=1,label='raw data')
 # plot the average with standard deviation bars
-plt.errorbar(window_centers,amplitude_mean,amplitude_std,label='rolling median')
+plt.errorbar(window_centers,amplitude_mean,amplitude_std,label='rolling mean')
+plt.errorbar(window_centers,amplitude_median,amplitude_std,label='rolling median')
 plt.xlabel('effective pupil position (mm)')
 plt.ylabel('normalized amplitude (ADU)')
 plt.gca().set_ylim(bottom=0)
 plt.legend()
-
+plt.savefig('figures/rolling_median.png',dpi=print_dpi)
 plt.show()
 
 ```
 
-    -5.316274783874224 3.618570634585382
 
-
-
-![png](dOCT_drusen_example_files/dOCT_drusen_example_5_1.png)
+![png](dOCT_drusen_example_files/dOCT_drusen_example_5_0.png)
 
 
 #### A model for directionality
 
+The amplitude distribution in the pupil of light backscattered by the retina is typically described as a sum of a constant (diffuse) component and a Gaussian (directional) component:
 
+$$a(x,y) = B+A\times 10^{-\rho[(x-x_0)^2+(y-y_0)^2]},$$
+
+where $B$ represents the diffuse component, $A$ represents the height of the Gaussian component, $\rho$ represents the directionality coefficient, $x$ ($y$) represents the horizontal (vertical) position in the pupil, and $x_0$ ($y_0$) the location of the Stiles-Crawford peak. $x$, $x_0$, $y$, and $y_0$ are typically expressed in $mm$, which results in $\rho$ having units of $mm^{-2}$. If, as in the present work, only the horizontal dimension of the directionality function is modeled, the equation simplifies to:
+
+$$a(x) = B+A\times 10^{-\rho[(x-x_0)^2]}$$
+
+The width of Gaussian distributions is more commonly described by standard deviation $\sigma$, and from that definition it is apparent that $\rho=\frac{1}{2\sigma^2}$, and that wider distributions (higher $\sigma$) have lower directionality coefficients $\rho$, and narrower ones have higher $\rho$.
+
+#### Estimating $B$, $A$, and $\rho$
+
+To estimate these three parameters, the smoothed functions described above were fit with a four parameter model. ($x_0$ was used to optimize the fits, but was not considered in further analysis.)
 
 
 ```python
+def gaussian(x_mm, B, A, rho, x0_mm):
+    return B + A*(10**(-rho*(x_mm-x0_mm)**2))
+
+
+amax = None
+
+def filename_to_fit(fn):
+    x_mm,amp = filename_to_x_mm_amplitude(fn)
+    wc,amean,amed,std = rolling_median(x_mm,amp)
+    fit_params = spo.curve_fit(gaussian,wc,amed)[0]
+    return fit_params, x_mm, amp, wc, amed, std
+
+def subject_to_plot(subject_folder):
+    plt.figure(figsize=(figure_size[0]*2,figure_size[1]),dpi=screen_dpi)
+    for idx,fn in enumerate(['directionality_raw_data_nondrusen_centered.npy','directionality_raw_data_drusen_centered.npy']):
+        ffn = os.path.join(subject_folder,fn)
+        plt.subplot(1,2,idx+1)
+        fit_params, x_mm, amp, wc, amed, std = filename_to_fit(ffn)
+        if idx==0:
+            amax = np.max(amp)
+        afit = gaussian(wc,*fit_params)
+        plt.plot(x_mm,amp,'.',alpha=0.1,markersize=1,label='raw data')
+        # plot the average with standard deviation bars
+        plt.errorbar(wc,amed,std,label='rolling median')
+        plt.plot(wc,afit,'k--',label='fit')
+        plt.xlabel('effective pupil position (mm)')
+        plt.ylabel('normalized amplitude (ADU)')
+        plt.gca().set_ylim(bottom=0)
+        plt.gca().set_ylim(top=amax)
+        plt.xlim((-2.5,2.5))
+        plt.legend()
+
+
+for subject_folder in ['data/subject_01','data/subject_02','data/subject_03','data/subject_04']:
+    print(ffn)
+    print(subject_to_plot(subject_folder))
+    print()
+        
+#print(spo.curve_fit(gaussian,x_mm,amplitude)[0])
+#print(spo.curve_fit(gaussian,window_centers,amplitude_median)[0])
+#print(spo.curve_fit(gaussian,window_centers,amplitude_mean)[0])
+
 
 ```
 
+    data/subject_01/directionality_raw_data_drusen_centered.npy
+    None
+    
+    data/subject_01/directionality_raw_data_drusen_centered.npy
+    None
+    
+    data/subject_01/directionality_raw_data_drusen_centered.npy
+    None
+    
+    data/subject_01/directionality_raw_data_drusen_centered.npy
+    None
+    
 
-```python
 
-```
+    <ipython-input-15-42de092177a3>:2: RuntimeWarning: overflow encountered in power
+      return B + A*(10**(-rho*(x_mm-x0_mm)**2))
+
+
+
+![png](dOCT_drusen_example_files/dOCT_drusen_example_9_2.png)
+
+
+
+![png](dOCT_drusen_example_files/dOCT_drusen_example_9_3.png)
+
+
+
+![png](dOCT_drusen_example_files/dOCT_drusen_example_9_4.png)
+
+
+
+![png](dOCT_drusen_example_files/dOCT_drusen_example_9_5.png)
+
