@@ -35,18 +35,22 @@ import numpy as np
 from matplotlib import pyplot as plt
 import os
 import scipy.optimize as spo
+import scipy.stats as sps
+
 plt.style.use('seaborn-deep')
+color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+subject_markers = ['s','o','d','^']
 print_dpi = 300
 screen_dpi = 100
 figure_size = (5,4)
-pupil_position = 'p00'
+pupil_position = 'p01'
 subject_folder = './data/subject_02/'
 
 # load B-scan and convert to dB
 bscan_fn = os.path.join(subject_folder,'pupil_position_%s_average_bscan.npy'%pupil_position)
 bscan = np.load(bscan_fn)
 dB = 20*np.log10(bscan)
-clim = (55,80)
+clim = (55,85)
 
 # load IS/OS location
 isos_location_fn = os.path.join(subject_folder,'pupil_position_%s_isos_axial_location.npy'%pupil_position)
@@ -123,6 +127,8 @@ x_mm,amplitude = filename_to_x_mm_amplitude(nondrusen_aggregate_fn)
 plt.figure(figsize=figure_size,dpi=screen_dpi)
 plt.plot(x_mm,amplitude,'.',alpha=0.2,markersize=1)
 plt.gca().set_ylim(bottom=0)
+plt.xlim((-2.5,2.5))
+
 plt.ylabel('normalized amplitude (ADU)')
 plt.xlabel('effective pupil position (mm)')
 plt.savefig('figures/amplitude_vs_angle.png',dpi=print_dpi)
@@ -140,7 +146,7 @@ While a clear dependence of IS/OS amplitude on angle of illumination is visible 
 
 
 ```python
-def rolling_median(pupil_position,amp,window_width=1.0,step_size=0.5,diagnostics=False):
+def rolling_median(pupil_position,amp,window_width=2.0,step_size=1.0,diagnostics=False):
     
     # find the start and end angles
     t_start = np.min(pupil_position)
@@ -176,6 +182,7 @@ plt.errorbar(window_centers,amplitude_median,amplitude_std,label='rolling median
 plt.xlabel('effective pupil position (mm)')
 plt.ylabel('normalized amplitude (ADU)')
 plt.gca().set_ylim(bottom=0)
+plt.xlim((-2.5,2.5))
 plt.legend()
 plt.savefig('figures/rolling_median.png',dpi=print_dpi)
 plt.show()
@@ -209,13 +216,13 @@ def gaussian(x_mm, B, A, rho, x0_mm):
 
 amax = None
 
-def filename_to_fit(fn):
+def fit_data_from_file(fn):
     x_mm,amp = filename_to_x_mm_amplitude(fn)
     wc,amean,amed,std = rolling_median(x_mm,amp)
     fit_params = spo.curve_fit(gaussian,wc,amed)[0]
     return fit_params, x_mm, amp, wc, amed, std
 
-subject_folder='data/subject_02'
+subject_folder='data/subject_04'
 
 plt.figure(figsize=(figure_size[0]*2,figure_size[1]),dpi=screen_dpi)
 titles = ['non-drusen','drusen']
@@ -223,7 +230,7 @@ titles = ['non-drusen','drusen']
 for idx,fn in enumerate(['directionality_raw_data_nondrusen_centered.npy','directionality_raw_data_drusen_centered.npy']):
     ffn = os.path.join(subject_folder,fn)
     plt.subplot(1,2,idx+1)
-    fit_params, x_mm, amp, wc, amed, std = filename_to_fit(ffn)
+    fit_params, x_mm, amp, wc, amed, std = fit_data_from_file(ffn)
     if idx==0:
         amax = np.max(amp)
     afit = gaussian(wc,*fit_params)
@@ -238,11 +245,16 @@ for idx,fn in enumerate(['directionality_raw_data_nondrusen_centered.npy','direc
     plt.xlim((-2.5,2.5))
     plt.legend()
     plt.title(titles[idx])
+    
 plt.savefig('figures/fitting_normal_drusen.png',dpi=print_dpi)
 ```
 
+    <ipython-input-4-df347e4ee221>:2: RuntimeWarning: overflow encountered in power
+      return B + A*(10**(-rho*(x_mm-x0_mm)**2))
 
-![png](dOCT_drusen_example_files/dOCT_drusen_example_9_0.png)
+
+
+![png](dOCT_drusen_example_files/dOCT_drusen_example_9_1.png)
 
 
 #### Comparing $B$, $A$, and $\rho$ between non-drusen and drusen regions
@@ -251,6 +263,106 @@ plt.savefig('figures/fitting_normal_drusen.png',dpi=print_dpi)
 
 ```python
 subject_folders = ['data/subject_01', 'data/subject_02', 'data/subject_03', 'data/subject_04']
+drusen_labels = ['non-drusen','drusen']
+
+# positions to visualize fits:
+x_mm_fit = np.arange(-2.5,2.55,0.05)
+
+linestyles = ['-',':']
+marker_alpha = 0.75
+
+B_grid = np.zeros((len(subject_folders),len(drusen_labels)))
+A_grid = np.zeros((len(subject_folders),len(drusen_labels)))
+rho_grid = np.zeros((len(subject_folders),len(drusen_labels)))
+plt.figure(figsize=(figure_size[0]*.75,figure_size[1]),dpi=screen_dpi)
+
+for subject_idx,subject_folder in enumerate(subject_folders):
+    subject_label = os.path.split(subject_folder)[1].replace('_',' ')
+    for drusen_idx,fn in enumerate(['directionality_raw_data_nondrusen_centered.npy','directionality_raw_data_drusen_centered.npy']):
+        drusen_label = drusen_labels[drusen_idx]
+        full_fn = os.path.join(subject_folder,fn)
+        fit_params, x_mm, amp, wc, amed, std = fit_data_from_file(full_fn)
+        B, A, rho, x0_mm = fit_params
+        y_fit = gaussian(x_mm_fit, B, A, rho, 0.0)
+        plt.plot(x_mm_fit,y_fit,marker=subject_markers[subject_idx],alpha=marker_alpha,markevery=20,color=color_cycle[drusen_idx],linestyle=linestyles[drusen_idx], label='%s, %s'%(subject_label,drusen_label))
+
+        B_grid[subject_idx,drusen_idx] = B
+        A_grid[subject_idx,drusen_idx] = A
+        rho_grid[subject_idx,drusen_idx] = rho
+        
+plt.gca().set_ylim(bottom=0)
+plt.xlim((-2.5,2.5))
+plt.xlabel('effective pupil position (mm)')
+plt.ylabel('amplitude fit (ADU)')
+
+        
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.show()
+
+
 ```
+
+    <ipython-input-4-df347e4ee221>:2: RuntimeWarning: overflow encountered in power
+      return B + A*(10**(-rho*(x_mm-x0_mm)**2))
+    <ipython-input-4-df347e4ee221>:2: RuntimeWarning: overflow encountered in power
+      return B + A*(10**(-rho*(x_mm-x0_mm)**2))
+    <ipython-input-4-df347e4ee221>:2: RuntimeWarning: overflow encountered in power
+      return B + A*(10**(-rho*(x_mm-x0_mm)**2))
+    <ipython-input-4-df347e4ee221>:2: RuntimeWarning: overflow encountered in power
+      return B + A*(10**(-rho*(x_mm-x0_mm)**2))
+
+
+
+![png](dOCT_drusen_example_files/dOCT_drusen_example_11_1.png)
+
+
+
+```python
+grids = [A_grid,B_grid,rho_grid]
+labels = ['A','B',r'$\rho$']
+xtl = ['nondrusen','drusen']
+
+plt.figure(figsize=(figure_size[0]*2.5,figure_size[1]),dpi=screen_dpi)
+for idx,(grid,label) in enumerate(zip(grids,labels)):
+
+    tres = sps.ttest_rel(grid[:,0],grid[:,1])
+    p = tres.pvalue
+    print(p)
+
+    if label=='B':
+        # do a second t-test excluding the outlier
+        tres = sps.ttest_rel(grid[:3,0],grid[:3,1])
+        p_nooutlier = tres.pvalue
+        print(p_nooutlier)
+
+    plt.subplot(1,3,idx+1)
+    plt.boxplot(grid,labels=xtl,notch=False)
+    
+    for idx in range(len(subject_folders)):
+        plt.plot(1.2,grid[idx,0],subject_markers[idx],color=color_cycle[0],alpha=markeralpha)
+        plt.plot(2.2,grid[idx,1],subject_markers[idx],color=color_cycle[1],alpha=markeralpha)
+        
+    plt.title('parameter %s, p=%0.3f'%(label,p))
+    
+    
+plt.show()
+print(B_grid)
+```
+
+    0.06478700447883119
+    0.31015640967256397
+    0.07480797749210936
+    0.029984353846298824
+
+
+
+![png](dOCT_drusen_example_files/dOCT_drusen_example_12_1.png)
+
+
+    [[1.90206923 1.1023884 ]
+     [1.8201435  1.29117264]
+     [1.41914991 1.15342948]
+     [1.62376128 1.99583339]]
+
 
 
