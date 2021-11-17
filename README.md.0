@@ -32,10 +32,33 @@ The following example illustrates the data recorded from a single pupil entry po
 
 ```python
 import numpy as np
+from matplotlib import rcParams
+#rcParams['font.family'] = 'serif'
+#rcParams['font.serif'] = ['Times New Roman']
+#rcParams['font.size'] = 10.0
+
+SMALL_SIZE = 9
+MEDIUM_SIZE = 10
+BIGGER_SIZE = 12
+plt.rc('font', family='serif')
+plt.rc('font', serif=['Times New Roman'])
+plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+plt.rc('figure', titlesize=MEDIUM_SIZE)  # fontsize of the figure title
+
 from matplotlib import pyplot as plt
 import os
 import scipy.optimize as spo
 import scipy.stats as sps
+
+
+subject_folders = ['data/subject_01', 'data/subject_02', 'data/subject_03', 'data/subject_04']
+drusen_labels = ['non-drusen','drusen']
+figure_directory = '/home/rjonnal/Dropbox/apps/Overleaf/Directional OCT & photoreceptor visibility over drusen/figs/'
 
 plt.style.use('seaborn-deep')
 color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -43,14 +66,43 @@ subject_markers = ['s','o','d','^']
 print_dpi = 300
 screen_dpi = 100
 figure_size = (5,4)
-pupil_position = 'p01'
-subject_folder = './data/subject_02/'
+
+pupil_position = 'm01'
+subject_folder = subject_folders[1]
+
+#pupil_position = 'p01'
+#subject_folder = subject_folders[0]
+
+#pupil_position = 'm01'
+#subject_folder = subject_folders[3]
+
+
+def savefig(pngfn,dpi):
+    pdffn = pngfn.replace('.png','.pdf')
+    plt.savefig(pngfn,dpi=dpi)
+    plt.savefig(pdffn,dpi=dpi)
+
+def scalebar(x_len_um,z_len_um,x0_um=150,z0_um=1380):
+    
+    x_um_per_px = 1800.0/800.0
+    z_um_per_px = 0.97
+    
+    um2pxx = lambda um: um/x_um_per_px
+    um2pxz = lambda um: um/z_um_per_px
+    
+    x_len = um2pxx(x_len_um)
+    z_len = um2pxz(z_len_um)
+    x0 = um2pxx(x0_um)
+    z0 = um2pxz(z0_um)
+    
+    plt.plot([x0,x0+x_len],[z0,z0],'y-',linewidth=5,alpha=1)
+    plt.plot([x0,x0],[z0,z0+z_len],'y-',linewidth=5,alpha=1)
 
 # load B-scan and convert to dB
 bscan_fn = os.path.join(subject_folder,'pupil_position_%s_average_bscan.npy'%pupil_position)
 bscan = np.load(bscan_fn)
 dB = 20*np.log10(bscan)
-clim = (55,85)
+clim = (50,85)
 
 # load IS/OS location
 isos_location_fn = os.path.join(subject_folder,'pupil_position_%s_isos_axial_location.npy'%pupil_position)
@@ -60,37 +112,54 @@ x = np.arange(len(isos_location))
 # load IS/OS angle
 isos_angle_fn = os.path.join(subject_folder,'pupil_position_%s_isos_angle.npy'%pupil_position)
 isos_angle = np.load(isos_angle_fn)
-
+isos_angle = isos_angle/2.0
+#isos_angle = (isos_angle/180*np.pi)*1000.0
+    
 # load IS/OS amplitude
 isos_amplitude_fn = os.path.join(subject_folder,'pupil_position_%s_isos_amplitude.npy'%pupil_position)
 isos_amplitude = np.load(isos_amplitude_fn)
 
+x_limits = (50,750)
+y_limits = (1900,1400)
+print('dynamic range: %0.1f'%(dB[y_limits[1]:y_limits[0],x_limits[0]:x_limits[1]].max()-dB[y_limits[1]:y_limits[0],x_limits[0]:x_limits[1]].min()))
+
 # show the B-scan and resulting IS/OS curve
-plt.figure(figsize=figure_size,dpi=screen_dpi)
-plt.imshow(dB,clim=clim,cmap='gray')
-plt.ylim((2000,1300))
+plt.figure(figsize=(figure_size[0]*2,figure_size[1]*1.5),dpi=screen_dpi)
+plt.imshow(dB,clim=clim,cmap='gray',aspect='equal')
+scalebar(100,100)
+plt.ylim(y_limits)
+plt.xlim(x_limits)
 plt.xticks([])
-#plt.yticks([])
+plt.yticks([])
 plt.colorbar()
-plt.plot(x,isos_location,label='IS/OS location',alpha=0.5)
-plt.legend()
-plt.savefig('figures/bscan_with_trace.png',dpi=print_dpi)
+
+plt.plot(x,isos_location+5,label='IS/OS location',alpha=1,color=color_cycle[2],linewidth=1)
+plt.plot(x,isos_location-5,label='IS/OS location',alpha=1,color=color_cycle[2],linewidth=1)
+plt.plot(x,isos_location-30,label='IS/OS location',alpha=1,color=color_cycle[4],linewidth=1)
+plt.plot(x,isos_location-40,label='IS/OS location',alpha=1,color=color_cycle[4],linewidth=1)
+
+#plt.legend()
+savefig(figure_directory+'bscan_with_trace.png',dpi=print_dpi)
 
 # plot angle and amplitude as functions of x
 plt.figure(figsize=figure_size,dpi=screen_dpi)
-plt.plot(x,isos_angle,label='IS/OS angle')
+plt.plot(x,isos_angle,label='IS/OS angle (deg)')
 plt.plot(x,20*np.log10(isos_amplitude),label='IS/OS amplitude (dB)')
+plt.xlim(x_limits)
 plt.legend()
 plt.xlabel('x location')
-plt.savefig('figures/amplitude_vs_location.png',dpi=print_dpi)
+savefig(figure_directory+'amplitude_vs_location.png',dpi=print_dpi)
 ```
 
-
-![png](dOCT_drusen_example_files/dOCT_drusen_example_1_0.png)
+    dynamic range: 31.1
 
 
 
 ![png](dOCT_drusen_example_files/dOCT_drusen_example_1_1.png)
+
+
+
+![png](dOCT_drusen_example_files/dOCT_drusen_example_1_2.png)
 
 
 #### Data aggregated over pupil positions
@@ -131,7 +200,7 @@ plt.xlim((-2.5,2.5))
 
 plt.ylabel('normalized amplitude (ADU)')
 plt.xlabel('effective pupil position (mm)')
-plt.savefig('figures/amplitude_vs_angle.png',dpi=print_dpi)
+savefig(figure_directory+'amplitude_vs_angle.png',dpi=print_dpi)
 plt.show()
 
 ```
@@ -184,7 +253,7 @@ plt.ylabel('normalized amplitude (ADU)')
 plt.gca().set_ylim(bottom=0)
 plt.xlim((-2.5,2.5))
 plt.legend()
-plt.savefig('figures/rolling_median.png',dpi=print_dpi)
+savefig(figure_directory+'rolling_median.png',dpi=print_dpi)
 plt.show()
 
 ```
@@ -246,10 +315,10 @@ for idx,fn in enumerate(['directionality_raw_data_nondrusen_centered.npy','direc
     plt.legend()
     plt.title(titles[idx])
     
-plt.savefig('figures/fitting_normal_drusen.png',dpi=print_dpi)
+savefig(figure_directory+'fitting_normal_drusen.png',dpi=print_dpi)
 ```
 
-    <ipython-input-4-df347e4ee221>:2: RuntimeWarning: overflow encountered in power
+    <ipython-input-4-a97bdf478f9b>:2: RuntimeWarning: overflow encountered in power
       return B + A*(10**(-rho*(x_mm-x0_mm)**2))
 
 
@@ -262,8 +331,7 @@ plt.savefig('figures/fitting_normal_drusen.png',dpi=print_dpi)
 
 
 ```python
-subject_folders = ['data/subject_01', 'data/subject_02', 'data/subject_03', 'data/subject_04']
-drusen_labels = ['non-drusen','drusen']
+
 
 # positions to visualize fits:
 x_mm_fit = np.arange(-2.5,2.55,0.05)
@@ -274,7 +342,10 @@ marker_alpha = 0.75
 B_grid = np.zeros((len(subject_folders),len(drusen_labels)))
 A_grid = np.zeros((len(subject_folders),len(drusen_labels)))
 rho_grid = np.zeros((len(subject_folders),len(drusen_labels)))
-plt.figure(figsize=(figure_size[0]*.75,figure_size[1]),dpi=screen_dpi)
+fig1 = plt.figure(figsize=(figure_size[0],figure_size[1]),dpi=screen_dpi)
+fig2 = plt.figure(figsize=(figure_size[0],figure_size[1]),dpi=screen_dpi)
+ax1 = fig1.add_axes([.1,.1,.5,.8])
+ax2 = fig2.add_axes([.1,.1,.5,.8])
 
 for subject_idx,subject_folder in enumerate(subject_folders):
     subject_label = os.path.split(subject_folder)[1].replace('_',' ')
@@ -284,31 +355,44 @@ for subject_idx,subject_folder in enumerate(subject_folders):
         fit_params, x_mm, amp, wc, amed, std = fit_data_from_file(full_fn)
         B, A, rho, x0_mm = fit_params
         y_fit = gaussian(x_mm_fit, B, A, rho, 0.0)
-        plt.plot(x_mm_fit,y_fit,marker=subject_markers[subject_idx],alpha=marker_alpha,markevery=20,color=color_cycle[drusen_idx],linestyle=linestyles[drusen_idx], label='%s, %s'%(subject_label,drusen_label))
-
+        ax1.plot(x_mm_fit,y_fit,marker=subject_markers[subject_idx],alpha=marker_alpha,markevery=20,color=color_cycle[drusen_idx],linestyle=linestyles[drusen_idx], label='%s, %s'%(subject_label,drusen_label))
+        if drusen_idx==0:
+            nondrusen_fit = y_fit
+        else:
+            ratio = nondrusen_fit/y_fit
+            ax2.plot(x_mm_fit,ratio,marker=subject_markers[subject_idx],alpha=marker_alpha,markevery=20,color=color_cycle[2],label='%s, ratio'%subject_label)
+        
         B_grid[subject_idx,drusen_idx] = B
         A_grid[subject_idx,drusen_idx] = A
         rho_grid[subject_idx,drusen_idx] = rho
         
+plt.figure(fig1.number)
 plt.gca().set_ylim(bottom=0)
 plt.xlim((-2.5,2.5))
 plt.xlabel('effective pupil position (mm)')
-plt.ylabel('amplitude fit (ADU)')
-
-        
+plt.ylabel('fit amplitude (ADU)')
 plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+savefig(figure_directory+'fits_all_subjects.png',dpi=print_dpi)
+
+plt.figure(fig2.number)
+plt.gca().set_ylim(bottom=1)
+plt.xlim((-2.5,2.5))
+plt.xlabel('effective pupil position (mm)')
+plt.ylabel('non-drusen -- drusen ratio')
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+savefig(figure_directory+'fit_ratios_all_subjects.png',dpi=print_dpi)
 plt.show()
 
 
 ```
 
-    <ipython-input-4-df347e4ee221>:2: RuntimeWarning: overflow encountered in power
+    <ipython-input-4-a97bdf478f9b>:2: RuntimeWarning: overflow encountered in power
       return B + A*(10**(-rho*(x_mm-x0_mm)**2))
-    <ipython-input-4-df347e4ee221>:2: RuntimeWarning: overflow encountered in power
+    <ipython-input-4-a97bdf478f9b>:2: RuntimeWarning: overflow encountered in power
       return B + A*(10**(-rho*(x_mm-x0_mm)**2))
-    <ipython-input-4-df347e4ee221>:2: RuntimeWarning: overflow encountered in power
+    <ipython-input-4-a97bdf478f9b>:2: RuntimeWarning: overflow encountered in power
       return B + A*(10**(-rho*(x_mm-x0_mm)**2))
-    <ipython-input-4-df347e4ee221>:2: RuntimeWarning: overflow encountered in power
+    <ipython-input-4-a97bdf478f9b>:2: RuntimeWarning: overflow encountered in power
       return B + A*(10**(-rho*(x_mm-x0_mm)**2))
 
 
@@ -317,10 +401,15 @@ plt.show()
 
 
 
+![png](dOCT_drusen_example_files/dOCT_drusen_example_11_2.png)
+
+
+
 ```python
 grids = [A_grid,B_grid,rho_grid]
 labels = ['A','B',r'$\rho$']
 xtl = ['nondrusen','drusen']
+markeralpha = 0.75
 
 plt.figure(figsize=(figure_size[0]*2.5,figure_size[1]),dpi=screen_dpi)
 for idx,(grid,label) in enumerate(zip(grids,labels)):
@@ -344,9 +433,9 @@ for idx,(grid,label) in enumerate(zip(grids,labels)):
         
     plt.title('parameter %s, p=%0.3f'%(label,p))
     
-    
+savefig(figure_directory+'parameters_all_subjects.png',dpi=print_dpi)
 plt.show()
-print(B_grid)
+
 ```
 
     0.06478700447883119
@@ -359,10 +448,45 @@ print(B_grid)
 ![png](dOCT_drusen_example_files/dOCT_drusen_example_12_1.png)
 
 
-    [[1.90206923 1.1023884 ]
-     [1.8201435  1.29117264]
-     [1.41914991 1.15342948]
-     [1.62376128 1.99583339]]
+#### Statistical analysis of raw data
+
+While the differences between nondrusen and drusen tissue are qualitatively visible in the plots above, the $p$ values of the t-tests of fitting parameters may understate the significant differences between the data. Three additional analyses were performed:
+
+1. Estimating 
 
 
+```python
+def get_data_range_from_file(fn,x_mm_abs_range):
+    x_mm,amp = filename_to_x_mm_amplitude(fn)
+    valid = np.where(np.logical_and(np.abs(x_mm)>=x_mm_abs_range[0],np.abs(x_mm)<x_mm_abs_range[1]))[0]
+    
+x_mm_ranges = [(0,0.5),(2.0,2.5)]
+
+for subject_idx,subject_folder in enumerate(subject_folders):
+    subject_label = os.path.split(subject_folder)[1].replace('_',' ')
+    for drusen_idx,fn in enumerate(['directionality_raw_data_nondrusen_centered.npy','directionality_raw_data_drusen_centered.npy']):
+        drusen_label = drusen_labels[drusen_idx]
+        full_fn = os.path.join(subject_folder,fn)
+        for x_mm_range in x_mm_ranges:
+            get_data_range_from_file(full_fn,x_mm_range)
+
+
+```
+
+
+```python
+# Other calculations
+
+# sampling density in z
+
+points_per_spectrum = 2048
+wavelength_spectrum = np.polyval([4.1e-11,8.01e-7],np.arange(points_per_spectrum))
+# k_in is just 2*pi/wavlength_spectrum, and k_out is a linearized version.
+k_in = 2.0*np.pi/wavelength_spectrum
+k_out = np.linspace(k_in[0],k_in[-1],points_per_spectrum)
+k_range = k_out[0]-k_out[-1]
+print(1/k_range/1.38)
+```
+
+    9.740456428983476e-07
 
